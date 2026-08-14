@@ -388,4 +388,17 @@ O acionamento de **ELO ANALISAR** deve produzir uma visão consolidada da SO, pe
 
 > **O que fornecer + quanto fornecer + como instalar + o que comprar + quais serviços executar + quais custos considerar + quem precisa definir tecnicamente + o que perguntar ao cliente + quais riscos proteger no orçamento.**
 
-Este arquivo deve ser incorporado ao repositório do ELO como diretriz do **Especialista de Orçamento (GPT)**.
+## 23. Fluxo de integração e MERGE
+
+Esta diretriz deve ser integrada ao repositório do ELO por meio de **Pull Request**, sempre que houver fluxo de revisão/merge configurado.
+
+Quando uma alteração desta diretriz for criada em uma branch de trabalho:
+1. criar commit na branch;
+2. abrir Pull Request para `main`;
+3. revisar as alterações;
+4. realizar o merge somente após a validação da alteração;
+5. confirmar que o arquivo está presente no `main` após o merge.
+
+A existência de um commit em `main` não deve ser interpretada como evidência de que houve merge de Pull Request. O GPT deve informar explicitamente se a alteração foi feita por commit direto ou por PR/merge.
+
+Este arquivo é a diretriz operacional do **Especialista de Orçamento (GPT)** para o gatilho **ELO ANALISAR**.
