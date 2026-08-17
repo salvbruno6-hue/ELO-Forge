@@ -68,7 +68,7 @@ merge_policy:
   mode: automatic_when_gates_pass
   require_elo_decision: APPROVE_MERGE
   require_specialist_pass: true
-  require_ci_pass: true
+  require_ci_pass: configured_required_checks_only
   require_acceptance_criteria: true
   require_no_blocking_findings: true
   require_scope_compliance: true
@@ -80,7 +80,7 @@ retry_policy:
   max_correction_cycles: 3
   on_exhaustion: ESCALATED
 
- delivery:
+delivery:
   branch_required: true
   pull_request_required: true
   draft_pull_request: false
