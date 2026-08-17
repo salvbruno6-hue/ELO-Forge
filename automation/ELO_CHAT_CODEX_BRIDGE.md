@@ -62,7 +62,7 @@ Automatic merge is allowed when ALL conditions are true:
 - task state is `APPROVED`;
 - ELO decision is `APPROVE_MERGE`;
 - required specialist reviews are `PASS` or `NOT_APPLICABLE`;
-- required CI checks are successful;
+- configured required CI checks are successful;
 - acceptance criteria are satisfied;
 - no unresolved blocking review findings exist;
 - changed-file scope is within the task;
