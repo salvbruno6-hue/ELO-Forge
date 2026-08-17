@@ -1,0 +1,65 @@
+id: ELO-ARCH-001
+title: Formalize architecture governance for Baseline v1.0
+status: READY
+risk: HIGH
+owner: ELO
+executor: Codex
+repository: salvbruno6-hue/ELO-Forge
+base_branch: main
+execution_branch: codex/elo-arch-001
+
+objective: >-
+  Formalize the minimum architecture-governance artifacts required to freeze
+  the ELO architecture as Baseline v1.0 without changing production behavior.
+
+scope:
+  include:
+    - ADR structure and index
+    - architecture versioning policy
+    - security governance requirements
+    - observability baseline requirements
+    - baseline freeze/release criteria
+  exclude:
+    - production code changes
+    - destructive database changes
+    - secret changes
+    - authentication implementation
+    - deployment changes
+
+required_inputs:
+  - AGENTS.md
+  - ELO_Blueprint_v1.0.md
+  - docs/
+  - doc/
+
+acceptance_criteria:
+  - ADR directory exists with an index and initial baseline ADRs.
+  - Architecture versioning and compatibility rules are documented.
+  - Security minimums are documented without inventing implementation details.
+  - Observability minimums are documented.
+  - Baseline v1.0 freeze criteria are explicit and testable.
+  - Existing repository conventions are preserved.
+  - No production behavior is changed.
+
+validation:
+  - verify markdown links where tooling exists
+  - inspect changed-file scope
+  - confirm no production source files changed
+  - report all validation commands and results
+
+delivery:
+  branch_required: true
+  pull_request_required: true
+  draft_pull_request: false
+  direct_main_push: false
+  merge_authority: human
+
+evidence:
+  required:
+    - task_id
+    - branch
+    - commit_sha
+    - changed_files
+    - validation_results
+    - pull_request
+    - blockers
