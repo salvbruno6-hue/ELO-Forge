@@ -26,11 +26,18 @@ scope:
     - authentication implementation
     - deployment changes
 
-required_inputs:
-  - AGENTS.md
-  - ELO_Blueprint_v1.0.md
-  - docs/
-  - doc/
+specialists:
+  required:
+    - architecture
+    - security
+    - data
+    - operations
+    - testing
+  optional:
+    - domain
+  protocol: >-
+    Specialists review only the task scope and produce actionable findings.
+    ELO resolves disagreements and determines corrections.
 
 acceptance_criteria:
   - ADR directory exists with an index and initial baseline ADRs.
@@ -47,19 +54,52 @@ validation:
   - confirm no production source files changed
   - report all validation commands and results
 
-delivery:
+autonomy:
+  mode: agentic
+  continue_until_terminal: true
+  correction_cycles_max: 3
+  allowed_terminal_states:
+    - COMPLETED
+    - BLOCKED
+    - ESCALATED
+    - FAILED
+
+merge_policy:
+  mode: automatic_when_gates_pass
+  require_elo_decision: APPROVE_MERGE
+  require_specialist_pass: true
+  require_ci_pass: true
+  require_acceptance_criteria: true
+  require_no_blocking_findings: true
+  require_scope_compliance: true
+  allow_main_direct_push: false
+  allow_bypass_branch_protection: false
+  human_approval: conditional
+
+retry_policy:
+  max_correction_cycles: 3
+  on_exhaustion: ESCALATED
+
+ delivery:
   branch_required: true
   pull_request_required: true
   draft_pull_request: false
   direct_main_push: false
-  merge_authority: human
+  merge_authority: ELO_GATED_AUTOMATION
 
 evidence:
   required:
     - task_id
+    - objective
+    - specialist_findings
+    - corrections
     - branch
     - commit_sha
     - changed_files
     - validation_results
     - pull_request
+    - ci_results
+    - elo_decision
+    - merge_result
+    - final_verification
     - blockers
