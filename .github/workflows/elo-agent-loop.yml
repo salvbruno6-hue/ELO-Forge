@@ -1,0 +1,246 @@
+name: ELO Agent Loop
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: GitHub issue number containing the ELO task
+        required: true
+        type: string
+
+concurrency:
+  group: elo-agent-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  execute-review-correct-merge:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && github.event.label.name == 'codex-ready')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+      MAX_CYCLES: 3
+
+    steps:
+      - name: Resolve task context
+        id: context
+        shell: bash
+        run: |
+          set -euo pipefail
+          issue_json="$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title,body,url,labels)"
+          title="$(jq -r '.title' <<<"$issue_json")"
+          body="$(jq -r '.body // ""' <<<"$issue_json")"
+          task_id="$(sed -n 's/^Task ID: `\([^`]*\)`.*/\1/p' <<<"$body" | head -n1)"
+          task_path="$(grep -oE 'automation/tasks/[A-Za-z0-9._/-]+\.yml' <<<"$body" | head -n1 || true)"
+          if [[ -z "$task_id" ]]; then
+            task_id="$(sed -n 's/^\[\([^]]*\)\].*/\1/p' <<<"$title" | head -n1)"
+          fi
+          if [[ -z "$task_path" ]]; then
+            echo "No task specification path found in issue body" >&2
+            exit 1
+          fi
+          echo "task_id=$task_id" >> "$GITHUB_OUTPUT"
+          echo "task_path=$task_path" >> "$GITHUB_OUTPUT"
+          echo "task_id=$task_id" >> "$GITHUB_ENV"
+          echo "task_path=$task_path" >> "$GITHUB_ENV"
+          echo "TASK_ID=$task_id"
+          echo "TASK_PATH=$task_path"
+
+      - name: Checkout base
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Read ELO task and policy
+        run: |
+          set -euo pipefail
+          test -f AGENTS.md
+          test -f automation/ELO_CHAT_CODEX_BRIDGE.md
+          test -f "$TASK_PATH"
+          cat AGENTS.md
+          cat automation/ELO_CHAT_CODEX_BRIDGE.md
+          cat "$TASK_PATH"
+
+      - name: Codex implementation
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          model: ${{ vars.CODEX_MODEL || 'gpt-5.5' }}
+          effort: ${{ vars.CODEX_EFFORT || 'high' }}
+          output-file: codex-implementation.txt
+          prompt: |
+            You are the ELO execution agent.
+            Read AGENTS.md, automation/ELO_CHAT_CODEX_BRIDGE.md and the task file at ${{ steps.context.outputs.task_path }}.
+            Execute the declared objective completely within scope.
+            Do not push or merge. Do not modify main directly.
+            Inspect the repository before changing anything.
+            Implement the task, run all declared validation, and leave the workspace ready for commit.
+            If a requirement is ambiguous, use repository evidence and the ELO governance rules; do not silently expand scope.
+            Report exactly what changed and every validation result.
+
+      - name: Create execution branch and PR
+        id: pr
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="codex/${TASK_ID,,}-${GITHUB_RUN_ID}"
+          git switch -c "$branch"
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "Codex produced no changes" >&2
+            exit 1
+          fi
+          git config user.name "ELO Codex Agent"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(elo): execute ${TASK_ID}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$branch"
+          pr_url="$(gh pr create --repo "$REPO" --base main --head "$branch" --title "${TASK_ID}: ELO autonomous execution" --body "Automated ELO task execution. Task: ${TASK_ID}. The workflow will perform specialist review, ELO review, correction cycles, validation, and gated merge.")"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_ENV"
+          echo "pr_url=$pr_url" >> "$GITHUB_ENV"
+
+      - name: Specialist and ELO review cycle 1
+        id: review1
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          model: ${{ vars.CODEX_MODEL || 'gpt-5.5' }}
+          effort: ${{ vars.CODEX_EFFORT || 'high' }}
+          output-file: elo-review-1.txt
+          prompt: |
+            Act as the ELO governance panel reviewing the current task branch.
+            Read AGENTS.md, automation/ELO_CHAT_CODEX_BRIDGE.md and ${{ steps.context.outputs.task_path }}.
+            Review ONLY the current diff against main.
+            Evaluate architecture, security, data, operations, testing, scope compliance and acceptance criteria.
+            Resolve specialist disagreements as ELO.
+            Do not edit files in this review step.
+            Your final line MUST be exactly one of:
+            ELO_DECISION=APPROVE_MERGE
+            ELO_DECISION=CORRECT
+            ELO_DECISION=BLOCK
+            If CORRECT, list concrete corrective actions before the final line.
+            If APPROVE_MERGE, state why all gates pass.
+
+      - name: Correct cycle 1 when required
+        if: contains(steps.review1.outputs.final-message, 'ELO_DECISION=CORRECT')
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          model: ${{ vars.CODEX_MODEL || 'gpt-5.5' }}
+          effort: ${{ vars.CODEX_EFFORT || 'high' }}
+          prompt: |
+            Read the current task, ELO bridge policy, and elo-review-1.txt.
+            Implement ONLY the corrective actions identified by ELO.
+            Re-run relevant validation. Do not broaden scope. Do not push or merge.
+
+      - name: Push correction 1
+        if: contains(steps.review1.outputs.final-message, 'ELO_DECISION=CORRECT')
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git commit -m "fix(elo): address ${TASK_ID} review findings" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$branch"
+
+      - name: Specialist and ELO review cycle 2
+        id: review2
+        if: contains(steps.review1.outputs.final-message, 'ELO_DECISION=CORRECT')
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          model: ${{ vars.CODEX_MODEL || 'gpt-5.5' }}
+          effort: ${{ vars.CODEX_EFFORT || 'high' }}
+          output-file: elo-review-2.txt
+          prompt: |
+            Repeat the ELO governance review on the current diff against main.
+            Read AGENTS.md, the bridge policy, the task, and elo-review-1.txt.
+            Validate that previous corrections are actually satisfied.
+            Do not edit files.
+            Final line MUST be ELO_DECISION=APPROVE_MERGE, ELO_DECISION=CORRECT, or ELO_DECISION=BLOCK.
+
+      - name: Correct cycle 2 when required
+        if: contains(steps.review2.outputs.final-message, 'ELO_DECISION=CORRECT')
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          model: ${{ vars.CODEX_MODEL || 'gpt-5.5' }}
+          effort: ${{ vars.CODEX_EFFORT || 'high' }}
+          prompt: |
+            Read the current task, bridge policy, and elo-review-2.txt.
+            Implement ONLY ELO's corrective actions. Re-run relevant validation. Do not push or merge.
+
+      - name: Push correction 2
+        if: contains(steps.review2.outputs.final-message, 'ELO_DECISION=CORRECT')
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git commit -m "fix(elo): address second review cycle" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$branch"
+
+      - name: Specialist and ELO review cycle 3
+        id: review3
+        if: contains(steps.review1.outputs.final-message, 'ELO_DECISION=CORRECT')
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          model: ${{ vars.CODEX_MODEL || 'gpt-5.5' }}
+          effort: ${{ vars.CODEX_EFFORT || 'high' }}
+          output-file: elo-review-3.txt
+          prompt: |
+            Perform the final ELO governance review against main.
+            Read AGENTS.md, the bridge policy, the task, and all available prior review files.
+            Do not edit files.
+            Final line MUST be ELO_DECISION=APPROVE_MERGE or ELO_DECISION=BLOCK.
+            APPROVE_MERGE requires acceptance criteria, specialist concerns, validation, and scope all to pass.
+
+      - name: Final gate and merge
+        shell: bash
+        env:
+          REVIEW1: ${{ steps.review1.outputs.final-message }}
+          REVIEW2: ${{ steps.review2.outputs.final-message }}
+          REVIEW3: ${{ steps.review3.outputs.final-message }}
+        run: |
+          set -euo pipefail
+          decision="$REVIEW1"
+          if grep -q 'ELO_DECISION=CORRECT' <<<"$REVIEW1"; then
+            decision="$REVIEW2"
+            if grep -q 'ELO_DECISION=CORRECT' <<<"$REVIEW2"; then
+              decision="$REVIEW3"
+            fi
+          fi
+          echo "$decision" | tee elo-final-decision.txt
+          if ! grep -q 'ELO_DECISION=APPROVE_MERGE' <<<"$decision"; then
+            gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "ELO task ${TASK_ID} did not reach APPROVE_MERGE. See workflow evidence and PR: ${pr_url}"
+            exit 1
+          fi
+          gh pr comment "$pr_url" --repo "$REPO" --body "ELO_DECISION=APPROVE_MERGE. Specialist review, acceptance criteria and correction gates passed. Initiating merge." 
+          gh pr merge "$pr_url" --repo "$REPO" --squash --delete-branch
+
+      - name: Final verification
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh issue close "$ISSUE_NUMBER" --repo "$REPO" --reason completed --comment "ELO task ${TASK_ID} completed and merged automatically after gated specialist/ELO review. PR: ${pr_url}"
