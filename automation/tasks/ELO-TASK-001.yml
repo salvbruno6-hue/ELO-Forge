@@ -1,0 +1,105 @@
+id: ELO-ARCH-001
+title: Formalize architecture governance for Baseline v1.0
+status: READY
+risk: HIGH
+owner: ELO
+executor: Codex
+repository: salvbruno6-hue/ELO-Forge
+base_branch: main
+execution_branch: codex/elo-arch-001
+
+objective: >-
+  Formalize the minimum architecture-governance artifacts required to freeze
+  the ELO architecture as Baseline v1.0 without changing production behavior.
+
+scope:
+  include:
+    - ADR structure and index
+    - architecture versioning policy
+    - security governance requirements
+    - observability baseline requirements
+    - baseline freeze/release criteria
+  exclude:
+    - production code changes
+    - destructive database changes
+    - secret changes
+    - authentication implementation
+    - deployment changes
+
+specialists:
+  required:
+    - architecture
+    - security
+    - data
+    - operations
+    - testing
+  optional:
+    - domain
+  protocol: >-
+    Specialists review only the task scope and produce actionable findings.
+    ELO resolves disagreements and determines corrections.
+
+acceptance_criteria:
+  - ADR directory exists with an index and initial baseline ADRs.
+  - Architecture versioning and compatibility rules are documented.
+  - Security minimums are documented without inventing implementation details.
+  - Observability minimums are documented.
+  - Baseline v1.0 freeze criteria are explicit and testable.
+  - Existing repository conventions are preserved.
+  - No production behavior is changed.
+
+validation:
+  - verify markdown links where tooling exists
+  - inspect changed-file scope
+  - confirm no production source files changed
+  - report all validation commands and results
+
+autonomy:
+  mode: agentic
+  continue_until_terminal: true
+  correction_cycles_max: 3
+  allowed_terminal_states:
+    - COMPLETED
+    - BLOCKED
+    - ESCALATED
+    - FAILED
+
+merge_policy:
+  mode: automatic_when_gates_pass
+  require_elo_decision: APPROVE_MERGE
+  require_specialist_pass: true
+  require_ci_pass: configured_required_checks_only
+  require_acceptance_criteria: true
+  require_no_blocking_findings: true
+  require_scope_compliance: true
+  allow_main_direct_push: false
+  allow_bypass_branch_protection: false
+  human_approval: conditional
+
+retry_policy:
+  max_correction_cycles: 3
+  on_exhaustion: ESCALATED
+
+delivery:
+  branch_required: true
+  pull_request_required: true
+  draft_pull_request: false
+  direct_main_push: false
+  merge_authority: ELO_GATED_AUTOMATION
+
+evidence:
+  required:
+    - task_id
+    - objective
+    - specialist_findings
+    - corrections
+    - branch
+    - commit_sha
+    - changed_files
+    - validation_results
+    - pull_request
+    - ci_results
+    - elo_decision
+    - merge_result
+    - final_verification
+    - blockers
