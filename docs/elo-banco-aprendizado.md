@@ -70,6 +70,35 @@ Estados de decisão:
 
 A decisão deve alimentar o histórico e, quando aplicável, atualizar a associação aprendida entre aplicação, contexto, necessidade, material e `COD_PRODUT`.
 
+## Roteamento do ELO APRENDER por assunto
+
+Quando o usuário disser `ELO aprender`, o ELO deve primeiro identificar o assunto da aprendizagem e direcionar o registro para a memória correspondente.
+
+```text
+ELO aprender
+ ↓
+identificar assunto
+ ├── ORÇAMENTO
+ │    ↓
+ │    memória de aprendizado de orçamento
+ │    ↓
+ │    docs/aprendizados/SO-XXX.26-CLIENTE.md no ELO-Forge
+ │
+ └── PLANEJAMENTO
+      ↓
+      memória de conhecimento de PLANEJAMENTO
+      ↓
+      estrutura de memória de Planejamento dentro do contexto/repositório Multiteiner
+```
+
+### Regra de roteamento
+
+- Se `ELO aprender` estiver dentro de um assunto de **ORÇAMENTO**, o aprendizado deve seguir o caminho de orçamento e o loop de commit do `ELO-Forge`.
+- Se `ELO aprender` estiver dentro de um assunto de **PLANEJAMENTO**, o aprendizado deve ser encaminhado para a **memória de conhecimento de Planejamento dentro do Multiteiner**, preservando a estrutura própria desse conhecimento.
+- Não misturar aprendizado de orçamento com memória de planejamento.
+- Se o assunto estiver explícito no contexto da conversa, não solicitar nova classificação ao usuário.
+- Se o assunto não puder ser determinado com segurança, classificar como `PENDENTE` até haver definição.
+
 ## Loop de aprendizado
 
 ```text
@@ -96,27 +125,32 @@ parâmetro reutilizável pelo ELO
 
 ## ELO APRENDER — LOOP DE COMMIT
 
-Todo aprendizado explicitamente solicitado pelo usuário com `ELO aprender` deve seguir este caminho:
+Todo aprendizado explicitamente solicitado pelo usuário com `ELO aprender` deve seguir este caminho, respeitando primeiro o roteamento por assunto:
 
 ```text
 ELO aprender
  ↓
-consolidar aprendizado da SO
+identificar assunto
+ ↓
+ORÇAMENTO → caminho de aprendizado de orçamento
+PLANEJAMENTO → memória de conhecimento do Planejamento / Multiteiner
+ ↓
+consolidar aprendizado da SO ou atividade
  ↓
 classificar como decisão arbitrada
  ↓
-registrar em docs/aprendizados/SO-XXX.26-CLIENTE.md
+registrar na memória correspondente
  ↓
 validar se o aprendizado é reutilizável
  ↓
-COMMIT no repositório ELO-Forge
+COMMIT no repositório correspondente
  ↓
-confirmar SHA do commit
+confirmar SHA do commit, quando houver commit Git
  ↓
 aprendizado disponível para futuras análises
 ```
 
-### Caminho padrão de armazenamento
+### Caminho padrão de armazenamento — Orçamento
 
 `salvbruno6-hue/ELO-Forge/docs/aprendizados/`
 
@@ -130,14 +164,16 @@ O arquivo individual deve conter contexto, decisões arbitradas, premissas, regr
 
 Quando o usuário executar o comando conceitual `ELO aprender` seguido de `loop commit`, o ELO deve:
 
-1. recuperar o aprendizado consolidado da SO em análise;
-2. verificar o arquivo individual em `docs/aprendizados/`;
-3. criar o arquivo se não existir ou atualizá-lo se já existir;
-4. registrar o aprendizado no `ELO-Forge`;
-5. retornar o SHA do commit realizado;
-6. tratar o aprendizado como disponível para reutilização.
+1. identificar se o contexto é orçamento ou planejamento;
+2. direcionar para a memória correspondente;
+3. recuperar o aprendizado consolidado;
+4. verificar o arquivo/registro na memória correspondente;
+5. criar ou atualizar o registro;
+6. registrar o aprendizado no repositório correspondente;
+7. retornar o SHA do commit realizado quando houver commit Git;
+8. tratar o aprendizado como disponível para reutilização.
 
-O commit é parte do loop de aprendizado e não uma etapa opcional.
+O commit é parte do loop de aprendizado e não uma etapa opcional quando o destino possui controle Git.
 
 ## Princípio arquitetural
 
