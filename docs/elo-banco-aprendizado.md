@@ -94,6 +94,51 @@ confiança / ocorrências / evidência
 parâmetro reutilizável pelo ELO
 ```
 
+## ELO APRENDER — LOOP DE COMMIT
+
+Todo aprendizado explicitamente solicitado pelo usuário com `ELO aprender` deve seguir este caminho:
+
+```text
+ELO aprender
+ ↓
+consolidar aprendizado da SO
+ ↓
+classificar como decisão arbitrada
+ ↓
+registrar em docs/aprendizados/SO-XXX.26-CLIENTE.md
+ ↓
+validar se o aprendizado é reutilizável
+ ↓
+COMMIT no repositório ELO-Forge
+ ↓
+confirmar SHA do commit
+ ↓
+aprendizado disponível para futuras análises
+```
+
+### Caminho padrão de armazenamento
+
+`salvbruno6-hue/ELO-Forge/docs/aprendizados/`
+
+Padrão de arquivo:
+
+`SO-XXX.26-NOME-CLIENTE.md`
+
+O arquivo individual deve conter contexto, decisões arbitradas, premissas, regras de análise, resultado relevante e estado do aprendizado. Não registrar como aprendizado uma sugestão ainda não arbitrada.
+
+### Regra de commit
+
+Quando o usuário executar o comando conceitual `ELO aprender` seguido de `loop commit`, o ELO deve:
+
+1. recuperar o aprendizado consolidado da SO em análise;
+2. verificar o arquivo individual em `docs/aprendizados/`;
+3. criar o arquivo se não existir ou atualizá-lo se já existir;
+4. registrar o aprendizado no `ELO-Forge`;
+5. retornar o SHA do commit realizado;
+6. tratar o aprendizado como disponível para reutilização.
+
+O commit é parte do loop de aprendizado e não uma etapa opcional.
+
 ## Princípio arquitetural
 
 O aprendizado deve preservar a cadeia semântica entre código, taxonomia, conceito, dimensão, aplicação, modelo, kit, material, `COD_PRODUT` e decisão. O ELO deve conversar com o banco por essas relações, e não depender apenas de similaridade textual ou conhecimento isolado do modelo.
